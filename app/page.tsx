@@ -1,6 +1,7 @@
+
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { PromptGallery } from "@/components/prompt-gallery"
 import { AddPromptModal } from "@/components/add-prompt-modal"
@@ -11,111 +12,200 @@ import { SettingsPage } from "@/components/settings-page"
 import { HelpCenter } from "@/components/help-center"
 import type { PromptItem, Category } from "@/types"
 
-// Sample data
-const sampleCategories: Category[] = [
-  { id: "1", name: "AI Prompts", icon: "Bot", color: "#3B82F6" },
-  { id: "2", name: "Command Lines", icon: "Terminal", color: "#059669" },
-  { id: "3", name: "Code Snippets", icon: "Code", color: "#7C3AED" },
-  { id: "4", name: "Git Commands", icon: "GitBranch", color: "#DC2626" },
-]
-
-const samplePrompts: PromptItem[] = [
-  {
-    id: "1",
-    title: "React Component Generator",
-    type: "prompt",
-    category: "AI Prompts",
-    content: "Create a React functional component with TypeScript that accepts props for...",
-    description: "Generates clean React components with TypeScript",
-    icon: "Bot",
-    isFavorite: true,
-    dateAdded: new Date("2024-01-15"),
-    tags: ["react", "typescript", "component"],
-  },
-  {
-    id: "2",
-    title: "Docker Build Command",
-    type: "command",
-    category: "Command Lines",
-    content: "docker build -t my-app:latest .",
-    description: "Build Docker image with latest tag",
-    icon: "Terminal",
-    isFavorite: false,
-    dateAdded: new Date("2024-01-10"),
-    tags: ["docker", "build"],
-  },
-  {
-    id: "3",
-    title: "Array Map Function",
-    type: "snippet",
-    category: "Code Snippets",
-    content: "const mapped = array.map((item, index) => {\n  return item.property;\n});",
-    description: "JavaScript array mapping template",
-    icon: "Code",
-    isFavorite: true,
-    dateAdded: new Date("2024-01-12"),
-    tags: ["javascript", "array", "map"],
-  },
-]
-
 export default function Home() {
   const [currentView, setCurrentView] = useState<string>("gallery")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
-  const [prompts, setPrompts] = useState<PromptItem[]>(samplePrompts)
-  const [categories, setCategories] = useState<Category[]>(sampleCategories)
+  const [prompts, setPrompts] = useState<PromptItem[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [selectedPrompt, setSelectedPrompt] = useState<PromptItem | null>(null)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
+  const [isDetailModalOpen, setIsDetailModal] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchPromptsAndCategories = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [promptsRes, categoriesRes] = await Promise.all([
+        fetch("/api/prompts"),
+        fetch("/api/categories"),
+      ]);
+
+      if (!promptsRes.ok) throw new Error("Failed to fetch prompts");
+      if (!categoriesRes.ok) throw new Error("Failed to fetch categories");
+
+      const fetchedPrompts: PromptItem[] = await promptsRes.json();
+      const fetchedCategories: Category[] = await categoriesRes.json();
+
+      // Convert dateAdded strings back to Date objects
+      const promptsWithDates = fetchedPrompts.map(prompt => ({
+        ...prompt,
+        dateAdded: new Date(prompt.dateAdded)
+      }));
+
+      setPrompts(promptsWithDates);
+      setCategories(fetchedCategories);
+    } catch (err) {
+      console.error("Failed to fetch data:", err);
+      setError(err instanceof Error ? err.message : "An unknown error occurred");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPromptsAndCategories();
+  }, [fetchPromptsAndCategories]);
 
   const filteredPrompts = prompts.filter((prompt) => {
     const matchesCategory =
       selectedCategory === "all" ||
       (selectedCategory === "favorites" && prompt.isFavorite) ||
-      prompt.category === selectedCategory
+      prompt.category === selectedCategory;
     const matchesSearch =
       prompt.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       prompt.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      prompt.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase()))
-    return matchesCategory && matchesSearch
-  })
+      prompt.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchesCategory && matchesSearch;
+  });
 
-  const handleAddPrompt = (newPrompt: Omit<PromptItem, "id" | "dateAdded">) => {
-    const prompt: PromptItem = {
-      ...newPrompt,
-      id: Date.now().toString(),
-      dateAdded: new Date(),
+  const handleAddPrompt = async (newPrompt: Omit<PromptItem, "id" | "dateAdded">) => {
+    try {
+      const response = await fetch("/api/prompts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newPrompt),
+      });
+      if (!response.ok) throw new Error("Failed to add prompt");
+      await fetchPromptsAndCategories(); // Re-fetch data to update UI
+      setIsAddModalOpen(false);
+    } catch (err) {
+      console.error("Error adding prompt:", err);
+      setError(err instanceof Error ? err.message : "Failed to add prompt");
     }
-    setPrompts([...prompts, prompt])
-    setIsAddModalOpen(false)
-  }
+  };
 
-  const handleEditPrompt = (updatedPrompt: PromptItem) => {
-    setPrompts(prompts.map((p) => (p.id === updatedPrompt.id ? updatedPrompt : p)))
-    setIsEditModalOpen(false)
-    setSelectedPrompt(null)
-  }
+  const handleEditPrompt = async (updatedPrompt: PromptItem) => {
+    try {
+      const response = await fetch(`/api/prompts/${updatedPrompt.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedPrompt),
+      });
+      if (!response.ok) throw new Error("Failed to edit prompt");
+      await fetchPromptsAndCategories(); // Re-fetch data to update UI
+      setIsEditModalOpen(false);
+      setSelectedPrompt(null);
+    } catch (err) {
+      console.error("Error editing prompt:", err);
+      setError(err instanceof Error ? err.message : "Failed to edit prompt");
+    }
+  };
 
-  const handleDeletePrompt = (id: string) => {
-    setPrompts(prompts.filter((p) => p.id !== id))
-    setIsDetailModalOpen(false)
-    setSelectedPrompt(null)
-  }
+  const handleDeletePrompt = async (id: string) => {
+    try {
+      const response = await fetch(`/api/prompts/${id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("Failed to delete prompt");
+      await fetchPromptsAndCategories(); // Re-fetch data to update UI
+      setIsDetailModal(false);
+      setSelectedPrompt(null);
+    } catch (err) {
+      console.error("Error deleting prompt:", err);
+      setError(err instanceof Error ? err.message : "Failed to delete prompt");
+    }
+  };
 
-  const handleToggleFavorite = (id: string) => {
-    setPrompts(prompts.map((p) => (p.id === id ? { ...p, isFavorite: !p.isFavorite } : p)))
-  }
+  const handleToggleFavorite = async (id: string) => {
+    const promptToUpdate = prompts.find((p) => p.id === id);
+    if (!promptToUpdate) return;
+
+    try {
+      const updatedPrompt = { ...promptToUpdate, isFavorite: !promptToUpdate.isFavorite };
+      const response = await fetch(`/api/prompts/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedPrompt),
+      });
+      if (!response.ok) throw new Error("Failed to toggle favorite");
+      await fetchPromptsAndCategories(); // Re-fetch data to update UI
+    } catch (err) {
+      console.error("Error toggling favorite:", err);
+      setError(err instanceof Error ? err.message : "Failed to toggle favorite");
+    }
+  };
+
+  const handleAddCategory = async (newCategory: Omit<Category, "id">) => {
+    try {
+      const response = await fetch("/api/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newCategory),
+      });
+      if (!response.ok) throw new Error("Failed to add category");
+      await fetchPromptsAndCategories(); // Re-fetch data to update UI
+    } catch (err) {
+      console.error("Error adding category:", err);
+      setError(err instanceof Error ? err.message : "Failed to add category");
+    }
+  };
+
+  const handleEditCategory = async (updatedCategory: Category) => {
+    try {
+      const response = await fetch(`/api/categories/${updatedCategory.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedCategory),
+      });
+      if (!response.ok) throw new Error("Failed to edit category");
+      await fetchPromptsAndCategories(); // Re-fetch data to update UI
+    } catch (err) {
+      console.error("Error editing category:", err);
+      setError(err instanceof Error ? err.message : "Failed to edit category");
+    }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    try {
+      const response = await fetch(`/api/categories/${id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("Failed to delete category");
+      await fetchPromptsAndCategories(); // Re-fetch data to update UI
+    } catch (err) {
+      console.error("Error deleting category:", err);
+      setError(err instanceof Error ? err.message : "Failed to delete category");
+    }
+  };
 
   const renderCurrentView = () => {
+    if (loading) {
+      return <div className="flex justify-center items-center h-full text-lg">Loading...</div>;
+    }
+
+    if (error) {
+      return <div className="flex justify-center items-center h-full text-lg text-red-500">Error: {error}</div>;
+    }
+
     switch (currentView) {
       case "categories":
-        return <CategoryManagement categories={categories} setCategories={setCategories} />
+        return (
+          <CategoryManagement
+            categories={categories}
+            onAddCategory={handleAddCategory}
+            onEditCategory={handleEditCategory}
+            onDeleteCategory={handleDeleteCategory}
+          />
+        );
       case "settings":
-        return <SettingsPage />
+        return <SettingsPage />;
       case "help":
-        return <HelpCenter />
+        return <HelpCenter />;
       default:
         return (
           <PromptGallery
@@ -125,15 +215,15 @@ export default function Home() {
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
             onPromptClick={(prompt) => {
-              setSelectedPrompt(prompt)
-              setIsDetailModalOpen(true)
+              setSelectedPrompt(prompt);
+              setIsDetailModal(true);
             }}
             onToggleFavorite={handleToggleFavorite}
             onAddNew={() => setIsAddModalOpen(true)}
           />
-        )
+        );
     }
-  }
+  };
 
   return (
     <div className="flex h-screen">
@@ -159,11 +249,11 @@ export default function Home() {
         <>
           <ItemDetailModal
             isOpen={isDetailModalOpen}
-            setIsOpen={setIsDetailModalOpen}
+            setIsOpen={setIsDetailModal}
             prompt={selectedPrompt}
             onEdit={() => {
-              setIsDetailModalOpen(false)
-              setIsEditModalOpen(true)
+              setIsDetailModal(false);
+              setIsEditModalOpen(true);
             }}
             onDelete={() => handleDeletePrompt(selectedPrompt.id)}
             onToggleFavorite={() => handleToggleFavorite(selectedPrompt.id)}
@@ -179,5 +269,7 @@ export default function Home() {
         </>
       )}
     </div>
-  )
+  );
 }
+
+

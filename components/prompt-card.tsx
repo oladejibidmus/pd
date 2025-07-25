@@ -75,7 +75,7 @@ export function PromptCard({ prompt, viewMode, onClick, onToggleFavorite }: Prom
     onToggleFavorite()
   }
 
-  const TypeIcon = typeIcons[prompt.type]
+  const TypeIcon = typeIcons[prompt.type] || Bot
 
   if (viewMode === "list") {
     return (

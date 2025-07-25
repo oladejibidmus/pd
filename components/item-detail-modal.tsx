@@ -49,7 +49,7 @@ export function ItemDetailModal({
     }
   }
 
-  const TypeIcon = typeIcons[prompt.type]
+  const TypeIcon = typeIcons[prompt.type] || Bot
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>

@@ -19,7 +19,7 @@ interface EditPromptModalProps {
   isOpen: boolean
   setIsOpen: (open: boolean) => void
   prompt: PromptItem
-  onEditPrompt: (prompt: PromptItem) => void
+  onEditPrompt: (prompt: PromptItem) => Promise<void>
   categories: Category[]
 }
 
@@ -37,11 +37,11 @@ export function EditPromptModal({ isOpen, setIsOpen, prompt, onEditPrompt, categ
     setFormData(prompt)
   }, [prompt])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.title || !formData.content) return
 
-    onEditPrompt(formData)
+    await onEditPrompt(formData)
   }
 
   const addTag = () => {
@@ -217,3 +217,4 @@ export function EditPromptModal({ isOpen, setIsOpen, prompt, onEditPrompt, categ
     </Dialog>
   )
 }
+

@@ -10,40 +10,39 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import type { Category } from "@/types"
 
 interface CategoryManagementProps {
-  categories: Category[]
-  setCategories: (categories: Category[]) => void
+  categories: Category[];
+  onAddCategory: (category: Omit<Category, "id">) => Promise<void>;
+  onEditCategory: (category: Category) => Promise<void>;
+  onDeleteCategory: (id: string) => Promise<void>;
 }
 
-export function CategoryManagement({ categories, setCategories }: CategoryManagementProps) {
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null)
-  const [newCategory, setNewCategory] = useState({ name: "", icon: "Folder", color: "#3B82F6" })
+export function CategoryManagement({
+  categories,
+  onAddCategory,
+  onEditCategory,
+  onDeleteCategory,
+}: CategoryManagementProps) {
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [newCategory, setNewCategory] = useState({ name: "", icon: "Folder", color: "#3B82F6" });
 
-  const handleAddCategory = () => {
-    if (!newCategory.name.trim()) return
+  const handleAddCategory = async () => {
+    if (!newCategory.name.trim()) return;
+    await onAddCategory(newCategory);
+    setNewCategory({ name: "", icon: "Folder", color: "#3B82F6" });
+    setIsAddModalOpen(false);
+  };
 
-    const category: Category = {
-      id: Date.now().toString(),
-      name: newCategory.name.trim(),
-      icon: newCategory.icon,
-      color: newCategory.color,
-    }
+  const handleEditCategory = async (updatedCategory: Category) => {
+    await onEditCategory(updatedCategory);
+    setEditingCategory(null);
+  };
 
-    setCategories([...categories, category])
-    setNewCategory({ name: "", icon: "Folder", color: "#3B82F6" })
-    setIsAddModalOpen(false)
-  }
+  const handleDeleteCategory = async (id: string) => {
+    await onDeleteCategory(id);
+  };
 
-  const handleEditCategory = (updatedCategory: Category) => {
-    setCategories(categories.map((cat) => (cat.id === updatedCategory.id ? updatedCategory : cat)))
-    setEditingCategory(null)
-  }
-
-  const handleDeleteCategory = (id: string) => {
-    setCategories(categories.filter((cat) => cat.id !== id))
-  }
-
-  const predefinedColors = ["#3B82F6", "#059669", "#7C3AED", "#DC2626", "#EA580C", "#CA8A04", "#0891B2", "#BE185D"]
+  const predefinedColors = ["#3B82F6", "#059669", "#7C3AED", "#DC2626", "#EA580C", "#CA8A04", "#0891B2", "#BE185D"];
 
   return (
     <div className="p-6">
@@ -174,5 +173,7 @@ export function CategoryManagement({ categories, setCategories }: CategoryManage
         </Dialog>
       )}
     </div>
-  )
+  );
 }
+
+

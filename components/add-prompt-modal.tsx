@@ -17,7 +17,7 @@ import type { PromptItem, Category } from "@/types"
 interface AddPromptModalProps {
   isOpen: boolean
   setIsOpen: (open: boolean) => void
-  onAddPrompt: (prompt: Omit<PromptItem, "id" | "dateAdded">) => void
+  onAddPrompt: (prompt: Omit<PromptItem, "id" | "dateAdded">) => Promise<void>
   categories: Category[]
 }
 
@@ -40,11 +40,11 @@ export function AddPromptModal({ isOpen, setIsOpen, onAddPrompt, categories }: A
   })
   const [tagInput, setTagInput] = useState("")
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.title || !formData.content) return
 
-    onAddPrompt(formData)
+    await onAddPrompt(formData)
 
     // Reset form
     setFormData({
@@ -223,3 +223,5 @@ export function AddPromptModal({ isOpen, setIsOpen, onAddPrompt, categories }: A
     </Dialog>
   )
 }
+
+
